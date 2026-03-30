@@ -11,6 +11,7 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "^55.0.8",
+    "expo-image-picker": "~55.0.14",
     "expo-status-bar": "~55.0.4",
     "firebase": "^12.11.0",
     "lucide-react-native": "^0.577.0",
