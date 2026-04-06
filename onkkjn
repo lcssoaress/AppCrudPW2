@@ -1,0 +1,1 @@
+faca uma tela para o admin, e que nesta tela tenha um crud um pouco parecido com o crud de usuario padrao, a diferenca é que o admin pode excluir o usuario cadastrado, e tambem pode dar permissao pra ele poder ser admin tambem, e tambem uma aba para o admin que permita que ele possa habiltar e desabilitar as feature flags
