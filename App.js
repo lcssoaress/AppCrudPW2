@@ -4,7 +4,7 @@ import { db, auth } from './firebaseConfig';
 import { ref, push, onValue, remove, update, set, get } from 'firebase/database';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import * as ImagePicker from 'expo-image-picker'; // NOVO: Seletor de imagens
-import { Trash2, Edit3, Plus, LogOut, ArrowLeft, ToggleLeft, ToggleRight, ImageIcon, X } from 'lucide-react-native'; // NOVO: Ícones
+import { Trash2, Edit3, Plus, LogOut, ArrowLeft, ToggleLeft, ToggleRight, ImageIcon, X, Users, Settings } from 'lucide-react-native'; // NOVO: Ícones
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -51,6 +51,31 @@ export default function App() {
     }
   }, [user]);
 
+  const [screen, setScreen] = useState('main');
+  const [allUsers, setAllUsers] = useState([]);
+  const [featureFlags, setFeatureFlags] = useState({ deleteEnabled: true });
+  const [adminTab, setAdminTab] = useState('users');
+
+  useEffect(() => {
+    if (userRole === 'admin') {
+      const usersRef = ref(db, 'users');
+      return onValue(usersRef, (snapshot) => {
+        const data = snapshot.val();
+        setAllUsers(data ? Object.keys(data).map(key => ({ uid: key, ...data[key] })) : []);
+      });
+    }
+  }, [userRole]);
+
+  useEffect(() => {
+    if (userRole === 'admin') {
+      const flagsRef = ref(db, 'featureFlags');
+      return onValue(flagsRef, (snapshot) => {
+        const data = snapshot.val();
+        setFeatureFlags(data || { deleteEnabled: true });
+      });
+    }
+  }, [userRole]);
+
   // --- FUNÇÃO PARA SELECIONAR IMAGEM ---
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -88,8 +113,6 @@ export default function App() {
       return null;
     }
   };
-
-  const [isDeleteEnabled, setIsDeleteEnabled] = useState(true);
 
   const handleAuth = async () => {
     if (!email || !password) return Alert.alert("Aviso", "Preencha todos os campos!");
@@ -138,6 +161,68 @@ export default function App() {
     Keyboard.dismiss();
   };
 
+  const AdminScreen = () => (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => setScreen('main')}>
+          <ArrowLeft color="#4B5563" size={26} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Admin Panel</Text>
+      </View>
+      <View style={styles.tabs}>
+        <TouchableOpacity style={[styles.tab, adminTab === 'users' && styles.activeTab]} onPress={() => setAdminTab('users')}>
+          <Users color={adminTab === 'users' ? '#F59E0B' : '#6B7280'} size={20} />
+          <Text style={[styles.tabText, adminTab === 'users' && styles.activeTabText]}>Users</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, adminTab === 'flags' && styles.activeTab]} onPress={() => setAdminTab('flags')}>
+          <Settings color={adminTab === 'flags' ? '#F59E0B' : '#6B7280'} size={20} />
+          <Text style={[styles.tabText, adminTab === 'flags' && styles.activeTabText]}>Feature Flags</Text>
+        </TouchableOpacity>
+      </View>
+      {adminTab === 'users' && (
+        <FlatList
+          data={allUsers}
+          keyExtractor={item => item.uid}
+          renderItem={({ item }) => (
+            <View style={styles.userCard}>
+              <View style={styles.userInfo}>
+                <Text style={styles.userEmail}>{item.email}</Text>
+                <Text style={styles.userRole}>Role: {item.role}</Text>
+              </View>
+              <View style={styles.userActions}>
+                <TouchableOpacity onPress={() => {
+                  const newRole = item.role === 'admin' ? 'user' : 'admin';
+                  update(ref(db, `users/${item.uid}`), { ...item, role: newRole });
+                }}>
+                  <Text style={styles.actionText}>Toggle Admin</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => {
+                  Alert.alert("Confirm", "Delete user?", [
+                    { text: "Cancel" },
+                    { text: "Delete", onPress: () => remove(ref(db, `users/${item.uid}`)) }
+                  ]);
+                }}>
+                  <Trash2 color="#EF4444" size={20} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        />
+      )}
+      {adminTab === 'flags' && (
+        <View style={styles.flagsContainer}>
+          <View style={styles.flagItem}>
+            <Text style={styles.flagText}>Enable Delete Tasks</Text>
+            <TouchableOpacity onPress={() => update(ref(db, 'featureFlags'), { ...featureFlags, deleteEnabled: !featureFlags.deleteEnabled })}>
+              {featureFlags.deleteEnabled ? <ToggleRight color="#10B981" size={30} /> : <ToggleLeft color="#9CA3AF" size={30} />}
+            </TouchableOpacity>
+          </View>
+          {/* Add more flags if needed */}
+        </View>
+      )}
+    </View>
+  );
+
   if (!user) {
     return (
       <View style={styles.authContainer}>
@@ -163,6 +248,10 @@ export default function App() {
     );
   }
 
+  if (screen === 'admin') {
+    return <AdminScreen />;
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -175,13 +264,18 @@ export default function App() {
         
         <View style={styles.headerActions}>
           {userRole === 'admin' && (
-            <TouchableOpacity onPress={() => setIsDeleteEnabled(!isDeleteEnabled)}>
-              {isDeleteEnabled ? <ToggleRight color="#10B981" size={34} /> : <ToggleLeft color="#9CA3AF" size={34} />}
+            <TouchableOpacity onPress={() => update(ref(db, 'featureFlags'), { ...featureFlags, deleteEnabled: !featureFlags.deleteEnabled })}>
+              {featureFlags.deleteEnabled ? <ToggleRight color="#10B981" size={34} /> : <ToggleLeft color="#9CA3AF" size={34} />}
             </TouchableOpacity>
           )}
           <TouchableOpacity onPress={() => signOut(auth)}>
             <LogOut color="#EF4444" size={26} />
           </TouchableOpacity>
+          {userRole === 'admin' && (
+            <TouchableOpacity onPress={() => setScreen('admin')}>
+              <Users color="#4B5563" size={26} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -237,7 +331,7 @@ export default function App() {
                 <Edit3 color="#4B5563" size={20} />
               </TouchableOpacity>
               
-              {isDeleteEnabled && (
+              {featureFlags.deleteEnabled && (
                 <TouchableOpacity onPress={() => remove(ref(db, `users/${user.uid}/tasks/${item.id}`))}>
                   <Trash2 color="#EF4444" size={20} />
                 </TouchableOpacity>
@@ -276,5 +370,19 @@ const styles = StyleSheet.create({
   taskContent: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
   taskImage: { width: 50, height: 50, borderRadius: 8 },
   taskText: { fontSize: 16, color: '#374151', flex: 1 },
-  taskActions: { flexDirection: 'row', gap: 15 }
+  taskActions: { flexDirection: 'row', gap: 15 },
+  tabs: { flexDirection: 'row', marginBottom: 20 },
+  tab: { flex: 1, alignItems: 'center', padding: 10, borderBottomWidth: 2, borderBottomColor: '#E5E7EB' },
+  activeTab: { borderBottomColor: '#F59E0B' },
+  tabText: { fontSize: 16, color: '#6B7280' },
+  activeTabText: { color: '#F59E0B', fontWeight: 'bold' },
+  userCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 12, elevation: 2, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  userInfo: { flex: 1 },
+  userEmail: { fontSize: 16, color: '#374151' },
+  userRole: { fontSize: 14, color: '#6B7280' },
+  userActions: { flexDirection: 'row', gap: 15, alignItems: 'center' },
+  actionText: { color: '#F59E0B', fontWeight: 'bold' },
+  flagsContainer: { padding: 20 },
+  flagItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  flagText: { fontSize: 16, color: '#374151' }
 });
